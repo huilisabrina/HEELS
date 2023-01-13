@@ -4,12 +4,12 @@ Heritability Estimation with high Efficiency using LD and Summary Statistics
 `HEELS` is a Python-based command line tool that produce accurate and precise local heritability estimates using summary-level statistics (marginal association test statistics and the in-sample LD statistics). For more details please see Li et al. (2023).
 
 ### Getting started
-You can clone the repository with 
+You can clone the repository with the following command:
 ```
 $ git clone git@github.com:huilisabrina/HEELS.git
 $ cd HEELS
 ```
-In order to install the Python dependencies, you will need the [Anaconda](https://www.anaconda.com/products/distribution) Python distribution and package manager. After installing Anaconda, run the following commands to create an environment with HEELS' dependencies:
+This should take a few seconds to finish. In order to install the Python dependencies, you will need the [Anaconda](https://www.anaconda.com/products/distribution) Python distribution and package manager. After installing Anaconda, run the following commands to create an environment with HEELS' dependencies:
 ```
 conda env create --file heels.yml
 source activate heels
@@ -39,7 +39,13 @@ We are happy to answer any questions you may have about using the software. Befo
   
 You may also contact us via email, although we encourage github issues so others can benefit from your question as well!    
 
-### Citation
+### License
+This project is licensed under GNU GPL v3.
+
+### Authors and citation
+Hui Li (Biostatistics Department, Harvard T.H. Chan School of Public Health)
+Rahul Mazumder (Operations Research Center and Center for Statistics and Data Science, MIT Sloan School of Management)
+Xihong Lin (Biostatistics Department and Statistics Department, Harvard University)
 
 If you are using the `HEELS` method or software, please cite Li, Hui et al. "Accurate and Efficient Estimation of Local
 Heritability using Summary Statistics and LD Matrix". *bioRxiv*. (2023).
