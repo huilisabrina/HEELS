@@ -223,8 +223,8 @@ def align_sumstats_LD(args, block_bim_path, df_ss, block_LD_dict, block_m, block
         logging.info("Aligning sumstats with LD info for block {}".format(block_number))
 
     # read in LD-SNP info file (for now, just use the .bim file that exactly match the LD input)
-    bim_fp = block_bim_path + ".bim"
-    df_bim = pd.read_csv(bim_fp, delim_whitespace=True, index_col=None, names=['CHR','SNP','pos','BP','A1','A2'])
+    ld_snp_fp = block_bim_path + ".bim"
+    df_bim = pd.read_csv(ld_snp_fp, delim_whitespace=True, index_col=None, names=['CHR','SNP','pos','BP','A1','A2'])
 
     assert block_m == df_bim.shape[0], "Dim mismatch between LD-SNPinfo file and the LD input!"
 
@@ -243,7 +243,7 @@ def align_sumstats_LD(args, block_bim_path, df_ss, block_LD_dict, block_m, block
     logging.info("Number of SNPs overlapped between sumstats and LD {m}".format(m = m))
     
     # sample size adjustment factor
-    nm_adj = (args.N/m) / (args.N_ref/block_m)
+    nm_adj = (args.N/m) / (n_ref/block_m)
 
     # SNP alignment between sumstats and LD (depending on the method, required adjustments differ)
 
@@ -799,7 +799,7 @@ IOfile.add_argument('--est_fp', default=None, type=str,
     help='File path prefix of the existing estimates. Used for cases where only the variance estimation is necessary.')
 IOfile.add_argument('--sumstats_fp', default=None, type=str, 
     help='File path of the GWAS summary statistics.')
-IOfile.add_argument('--bim_fp', default='geno.bim', type=str, 
+IOfile.add_argument('--ld_snp_fp', default='geno.bim', type=str, 
     help='File path of the LD SNP information. Used for alignment of the LD SNPs with the GWAS SNPs. Required columns are CHR,BP,SNP. Currently using the .bim file directly. Other file formats are also allowed, as long as the required columns are present.')
 IOfile.add_argument('--ld_fp', default='ld_mat', type=str, 
     help='File paths of the LD matrix. Should be stored in .npz format. If --partition is specified, the filepath should contain "@" to indicate where --block_index should be inserted.')
@@ -809,8 +809,8 @@ IOfile.add_argument('--pheno_index', default="1", type=str,
     help='Index number of the experiment replicate. (Used most for simulation purposes).')
 IOfile.add_argument('--N', default=None, type=int, 
     help='Sample size of the GWAS sample. Required for HEELS estimation.')
-IOfile.add_argument('--N_ref', default=None, type=int, 
-    help='Sample size of the reference sample for LD. Required. ')
+# IOfile.add_argument('--N_ref', default=None, type=int, 
+    # help='Sample size of the reference sample for LD. Required. ')
 IOfile.add_argument('--stream-stdout', default=False, action="store_true", help='Stream log information on console in addition to writing to log file.')
 
 # block-wise 
@@ -921,7 +921,7 @@ estimation.add_argument('--lrt_mode', default="mixture", type=str,
     help='The type of null distribution to use for calibrating the LRT statistic. Options: mixture - 0.5,0.5 combination of chi2 with DF 1 and 2.')
 estimation.add_argument('--maxIter', default=100, type=int, 
     help='Maximum number of iterations for HEELS.')
-estimation.add_argument('--tol', default=1e-3, type=float, 
+estimation.add_argument('--tol', default=1e-4, type=float, 
     help='The tolerance for convergence criterion.')
 
 # related to updating equations
@@ -1004,8 +1004,7 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # read in sample sizes
-    n_ref = int(args.N_ref)
-    n = int(args.N)
+    n_ref = n = int(args.N)
     tol = float(args.tol)
 
     try:
@@ -1032,8 +1031,8 @@ if __name__ == '__main__':
                 logging.info("Total number of markers: {}".format(m_total))
 
                 # scale LD blocks by N_ref and M
-                # LD_list = [LD_list[i] * args.N_ref / m_ref_list[i] for i in range(len(LD_list))]
-                LD_list = [LD_list[i] * args.N_ref / m_total for i in range(len(LD_list))]
+                # LD_list = [LD_list[i] * n_ref / m_ref_list[i] for i in range(len(LD_list))]
+                LD_list = [LD_list[i] * n_ref / m_total for i in range(len(LD_list))]
 
                 # drop NaN values (should not do anything in simulations)
                 LD_noNA_list = list()
@@ -1154,14 +1153,14 @@ if __name__ == '__main__':
 
             # take the overlap between LD and sumstats
             if args.partition: # TO TEST
-                bim_fp_list = [args.bim_fp.replace("@", str(block_index[i])) for i in range(args.num_blocks)]
+                ld_snp_fp_list = [args.ld_snp_fp.replace("@", str(block_index[i])) for i in range(args.num_blocks)]
                 K = args.num_blocks
-                kiu = [align_sumstats_LD(args, bim_fp_list[k], df_ss[k], LD_dict_list[k], m_ref_list[k], k+1) for k in range(K)]
+                kiu = [align_sumstats_LD(args, ld_snp_fp_list[k], df_ss[k], LD_dict_list[k], m_ref_list[k], k+1) for k in range(K)]
                 LD_dict_list = [x[0] for x in kiu]
                 df_both_list = [x[1] for x in kiu]
 
             else:
-                LD_dict, df_both = align_sumstats_LD(args, args.bim_fp, df_ss, LD_dict, m_ref)
+                LD_dict, df_both = align_sumstats_LD(args, args.ld_snp_fp, df_ss, LD_dict, m_ref)
 
         logging.info(short_borderline)
         # ==========================

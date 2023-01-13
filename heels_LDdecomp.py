@@ -895,7 +895,7 @@ def LDdecomp_auto(args, LD, norm_func = np.linalg.norm):
 
     LD_norm = norm_func(LD)
     m_ref = LD.shape[0]
-    n_ref = int(args.N_ref)
+    n_ref = int(args.N)
     min_sparsity = args.min_sparsity
 
     # stopping criteria & reference
