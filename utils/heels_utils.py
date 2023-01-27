@@ -466,8 +466,8 @@ def HEELS_variance(sigma_g, sigma_e, eigvals, n, m, eff_m=False, r=None):
     tr_Winv = np.sum(1 / (eigvals[-r:] + lam))
     tr_Winv_2 = np.sum(1 / ((eigvals[-r:] + lam)**2))
 
-    logging.info("Used eigvals")
-    logging.info(eigvals[-r:])
+    # logging.info("Used eigvals")
+    # logging.info(eigvals[-r:])
 
     if eff_m:
         eff_m = np.sum(eigvals / (eigvals + lam))
@@ -491,8 +491,8 @@ def HEELS_variance_new(sigma_g, sigma_e, eigvals, n, m, r=None, constrain_sigma=
     tr_Winv = np.sum(1 / (eigvals[-r:] + lam))
     tr_Winv_2 = np.sum(1 / ((eigvals[-r:] + lam)**2))
 
-    logging.info("Used eigvals")
-    logging.info(eigvals[-r:])
+    # logging.info("Used eigvals")
+    # logging.info(eigvals[-r:])
 
     i11 = (n - m) / (sigma_e**2) + tr_Winv_2 / (sigma_g**2)
     i12 = tr_Winv / (sigma_g**2) - (sigma_e*tr_Winv_2) / (sigma_g**3)

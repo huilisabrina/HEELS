@@ -8,6 +8,7 @@
 #SBATCH -e heels_exact_ld_%A_%a.err
 #SBATCH --mem=10G                              # Memory pool for all cores
 #SBATCH --mail-type=ALL
+approx_method=$1
 
 module load Anaconda3/5.0.1-fasrc02
 source activate pcgc
@@ -17,16 +18,20 @@ mkdir -p ./demo/output
 
 #-------------------------------------------------------
 # run the HEELS heritability estimation algorithm
+# using the approximated form of the LD matrix 
 #-------------------------------------------------------
 
 python run_HEELS.py \
-    --output_fp ./demo/output/test_h2 \
-    --sumstats_fp ./data/ukb_332k_simul_pheno.txt \
-    --ld_fp ./data/ukb_332k_chr22_LD.npz \
-    --ld_snp_fp ./data/ukb_332k_chr22_maf01_geno1.bim \
+    --output_fp ./demo/output/test_h2_${approx_method} \
+    --sumstats_fp ./data/ukb_30k_simul_pheno.txt \
+    --ld_fp ./data/ukb_30k_chr22_LD.npz \
+    --ld_snp_fp ./data/ukb_30k_chr22_maf01_geno1.bim \
+    --constrain_sigma \
     --init_values 0.1,0.9 \
-    --N 332340 \
+    --N 30000 \
     --tol 1e-4 \
+    --LD_approx_mode manual \
+    --LD_approx_method ${approx_method} \
+    --LD_approx_path ./demo/input/ukb_30k_chr22_${approx_method}_${approx_method}_LRdecomp \
     --calc_var \
     --stream-stdout
-
