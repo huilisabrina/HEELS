@@ -44,7 +44,7 @@ If you are using the `HEELS` method or software, please cite [Li, Hui, et al. (2
 Heritability using Summary Statistics and LD Matrix, 2023](https://www.biorxiv.org/content/10.1101/2023.02.08.527759v1). doi: <https://doi.org/10.1101/2023.02.08.527759>. 
 
 ### License
-This project is licensed under GNU GPL v3.
+This package is available under the MIT license.
 
 ### Authors
 Hui Li (Biostatistics Department, Harvard T.H. Chan School of Public Health)
