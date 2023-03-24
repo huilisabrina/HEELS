@@ -41,7 +41,7 @@ You may also contact us via email, although we encourage github issues so others
 
 ### Citation
 If you are using the `HEELS` method or software, please cite [Li, Hui, et al. (2023) Accurate and Efficient Estimation of Local
-Heritability using Summary Statistics and LD Matrix, 2023](https://www.biorxiv.org/content/10.1101/2023.02.08.527759v1). doi: <https://doi.org/10.1101/2023.02.08.527759>. 
+Heritability using Summary Statistics and LD Matrix, 2023](https://www.biorxiv.org/content/10.1101/2023.02.08.527759v2.abstract). doi: <https://doi.org/10.1101/2023.02.08.527759>. 
 
 ### License
 This package is available under the MIT license.
