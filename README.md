@@ -6,7 +6,7 @@ Heritability Estimation with high Efficiency using LD and Summary Statistics
 ### Getting started
 You can clone the repository with the following command:
 ```
-$ git clone git@github.com:huilisabrina/HEELS.git
+$ git clone https://github.com/huilisabrina/HEELS.git
 $ cd HEELS
 ```
 This should take a few seconds to finish. In order to install the Python dependencies, you will need the [Anaconda](https://www.anaconda.com/products/distribution) Python distribution and package manager. After installing Anaconda, run the following commands to create an environment with HEELS' dependencies:
