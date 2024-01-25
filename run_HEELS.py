@@ -41,7 +41,7 @@ from utils import heels_utils
 from utils import heels_format
 import heels_LDdecomp
 
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 borderline = "<><><<>><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>"
 short_borderline = "<><><<>><><><><><><><><><><><><><><><><><><><><><><><><><><><><>\n"
@@ -62,7 +62,7 @@ header += "\n\n"
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.width', 800)
-pd.set_option('precision', 12)
+pd.set_option('display.precision', 12)
 pd.set_option('max_colwidth', 800)
 pd.set_option('colheader_justify', 'left')
 
