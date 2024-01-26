@@ -39,18 +39,17 @@ We are happy to answer any questions you may have about using the software. Befo
 You may also contact us via email, although we encourage github issues so others can benefit from your question as well.  
 
 ### Citation
-If you are using the `HEELS` method or software, please cite [Li, Hui, et al. (2023) Accurate and Efficient Estimation of Local
-Heritability using Summary Statistics and LD Matrix, 2023](https://www.biorxiv.org/content/10.1101/2023.02.08.527759v2.abstract). doi: <https://doi.org/10.1101/2023.02.08.527759>. 
+If you are using the `HEELS` method or software, please cite Li, H., Mazumder, R. & Lin, X. Accurate and efficient estimation of local heritability using summary statistics and the linkage disequilibrium matrix. Nat Commun 14, 7954 (2023). doi: <https://doi.org/10.1038/s41467-023-43565-9>. Link to the paper [here](https://www.nature.com/articles/s41467-023-43565-9).
 
 ### License
 This package is available under the MIT license.
 
 ### Authors
-Hui Li (Biostatistics Department, Harvard T.H. Chan School of Public Health)
+Hui Li (Department of Biostatistics, Harvard T.H. Chan School of Public Health)
 
 Rahul Mazumder (Operations Research Center and Center for Statistics and Data Science, MIT Sloan School of Management)
 
-Xihong Lin (Biostatistics Department and Statistics Department, Harvard University)
+Xihong Lin (Department of Biostatistics and Department of Statistics, Harvard University)
 
 ### Acknoledgement
 We are very grateful to Luke O’Connor, Huwenbo Shi, Alkes Price, Samuel Kou, Ben Neale and Shamil Sunyaev for their helpful discussions and feedback. This work was supported by grants R35-CA197449, 548U19-CA203654, R01-HL163560, U01-HG012064 and U01-HG009088 (X. Lin).
