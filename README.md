@@ -9,27 +9,26 @@ You can clone the repository with the following command:
 $ git clone https://github.com/huilisabrina/HEELS.git
 $ cd HEELS
 ```
-This should take a few seconds to finish. In order to install the Python dependencies, you will need the [Anaconda](https://www.anaconda.com/products/distribution) Python distribution and package manager. After installing Anaconda, run the following commands to create an environment with HEELS' dependencies:
+This should take a few seconds to finish. In order to install the Python dependencies, you will need the conda package manager or its faster implementation, Mamba. You can use the following commands to create an environment that contains the packages required by HEELS as well as their dependencies:
 ```
-conda env create --file heels.yml
+mamba create -n heels python=3.10.12 pip numpy pandas scipy pandas-plink joblib
 source activate heels
+mamba install scikit-learn-intelex -c conda-forge
 ```
-To test whether installation is done properly, typing the following should give a description of the software and accepted command-line options.
+To test whether installation is done properly, open a new shell or terminal, type the following commands. 
 ```
-$ python3 ./run_HEELS.py -h
+conda activate heels
+python ./run_HEELS.py -h
 ```
-If an error occurs, then something has gone wrong during installation.
+If HEELS has been installed successfully, you should see a brief description of the software and a list of the accepted command-line options. If an error occurs, then something has gone wrong during installation.
 
 ### Updating `HEELS`
 You should keep your local instance of this software up to date with the changes that are made on the github repository. To do that, simply type 
 ```
 $ git pull
 ```
-in the `HEELS` directory. If your local instance is outdated, `git` will retrieve all changes and update the code. Otherwise, you will be told that your local instance is already up-to-date. In case the Python dependencies have changed, you can update the HEELS environment with the following
+in the `HEELS` directory. If your local instance is outdated, `git` will retrieve all changes and update the code. Otherwise, you will be told that your local instance is already up-to-date. 
 
-```
-conda env update --file heels.yml
-```
 
 ### Support
 We are happy to answer any questions you may have about using the software. Before [opening an issue](https://github.com/huilisabrina/HEELS/issues), please be sure to read the wiki page and read more about our method via the link below. Please also reference the descriptions about our input flags to understand their proper usage. If your problem persists, **please do the following:** as the next step:
