@@ -9,7 +9,7 @@
 # - utils/heels_utils
 # - heels_LDcecomp
 
-# Version: 0.0.1
+# Version: 1.0.1 (post release)
 #-------------------------------------------------------
 
 import os, sys, re
@@ -41,7 +41,7 @@ from utils import heels_utils
 from utils import heels_format
 import heels_LDdecomp
 
-__version__ = '0.0.3'
+__version__ = '1.0.1'
 
 borderline = "<><><<>><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>"
 short_borderline = "<><><<>><><><><><><><><><><><><><><><><><><><><><><><><><><><><>\n"
@@ -74,19 +74,16 @@ def read_sparse_LD(args, block_path, block_number = None):
 
     '''
     Read in LD matrix in its sparse representation.
-    NOT to be used for reading full LD matrix.
 
-    Parameters:
+    Input:
     -----------
     block_path: file path to the LD matrix or matrices
     block_number: index of the LD block, if multiple blocks are specified
 
-
     Returns:
     ---------
-    LD_dict: dictionary of the LD information. Contents vary depending on the method
-    m_ref: number of reference variants
-
+    LD_dict: a dictionary of the LD approximation objects. Values of the dict vary depending on the method.
+    m_ref: number of variants in the LD sample.
 
     '''
     if block_number is None:
@@ -97,23 +94,21 @@ def read_sparse_LD(args, block_path, block_number = None):
     if args.LD_approx_mode is None or args.LD_approx_method is None:
         raise ValueError("Requires specifying --LD_approx_mode and --LD_approx_method when --LD_approx_path is not None")
     else:
-        logging.info("Sparse decomposition based on the method: {}".format(args.LD_approx_method))
+        logging.info("Sparse decomposition generated from: {}".format(args.LD_approx_method))
         
         # read in B,R if the mode is auto
         if args.LD_approx_mode == "auto":
             args.block_B = int(np.loadtxt(block_path + ".opt_b"))
             args.block_R = int(np.loadtxt(block_path + ".opt_r"))
             logging.info("Adopted optimal (B,R) values are: ({},{})".format(block_B, args.block_R))
+        else:
+            assert args.LD_approx_R is not None, "Requires a value of R in --LD_approx_R"
 
         # unified reading of all alternative methods
         if args.LD_approx_method == "Band_only":
             decomp_objs = np.load(block_path + ".npz")
             LD_b = decomp_objs['LD_b']
             args.block_B = np.count_nonzero(LD_b[0,:])
-            logging.info("Bandwidth of the banded component used in the LD approx: {}".format(args.block_B))
-
-            # compute norm of the err
-            # F_norm = np.linalg.norm(LD - LD_b)
 
         elif args.LD_approx_method == "LR_only":
             decomp_objs = np.load(block_path + ".npz")
@@ -122,32 +117,32 @@ def read_sparse_LD(args, block_path, block_number = None):
 
             # reconstruct LD based on the truncation
             LD_lr = eigvec.dot(np.diag(eigval).dot(np.transpose(eigvec)))
-            args.block_R = eigval.shape[0]
-            logging.info("Number of low-rank factors used in the LD approx: {}".format(args.block_R))
 
-            # compute norm of the err
-            # F_norm = np.linalg.norm(LD - LD_lr)
+        elif args.LD_approx_method == "block_UL":
+            decomp_objs = np.load(block_path + ".npz")
+            LD_b = decomp_objs['B']
+            args.block_B = np.count_nonzero(LD_b[0,:])
 
+            chol_U = decomp_objs['U']
+            logging.info("Successfully read in the approximation!")
+            logging.info("Dimension of B: {}".format(LD_b.shape))
+            logging.info("Dimension of U: {}".format(chol_U.shape))
+            LD_lr = chol_U.dot(chol_U.T)
+            
         else:
             decomp_objs = np.load(block_path + ".npz")
             eigval = decomp_objs['w']
             eigvec = decomp_objs['v']
             LD_b = decomp_objs['LD_b']
             args.block_B = np.count_nonzero(LD_b[0,:])
-            logging.info("Bandwidth of the banded component used in the LD approx: {}".format(args.block_B))
 
             # reconstruct LD based on the truncation
             LD_lr = eigvec.dot(np.diag(eigval).dot(np.transpose(eigvec)))
-            args.block_R = eigval.shape[0]
-            logging.info("Number of low-rank factors used in the LD approx: {}".format(args.block_R))
-
-            # compute norm of the err
-            # F_norm = np.linalg.norm(LD - LD_lr - LD_b)
 
         # additional adjustment for the sparse representation part
-        if args.LD_approx_method != "Band_only":
-            # logging.info("(Check) Smallest eigenvalues used for the LR component: ")
-            # logging.info(eigval[-10:])
+        if args.LD_approx_method != "Band_only" and args.LD_approx_method != "block_UL":
+            logging.info("(Check) Smallest eigenvalues used for the LR component: ")
+            logging.info(eigval[-10:])
 
             #=======================
             # Inducing sparsity
@@ -159,30 +154,27 @@ def read_sparse_LD(args, block_path, block_number = None):
                 logging.info("Sparsity of the eigenvectors for the LR component: {}".format(np.sum(np.abs(eigvec) < float(args.LD_approx_thres_eigvec)) / (m*args.block_R)))
                 eigvec[np.abs(eigvec) < float(args.LD_approx_thres_eigvec)] = 0
 
-
-    # organize the readings of the input data into LD_dict and m_ref
     if args.LD_approx_method == "LR_only":
         LD_dict = dict({'eigvec': eigvec, 'eigval': eigval})
         m_ref = eigvec.shape[0]
     elif args.LD_approx_method == "Band_only":
         LD_dict = dict({'LD_banded': heels_format.band_format(LD_b, args.block_B)})
         m_ref = LD_b.shape[0]
+    elif args.LD_approx_method == "block_UL":
+        LD_dict = dict({'LD_banded': heels_format.band_format(LD_b, args.block_B), 'LD_lr_U': chol_U})
+        m_ref = chol_U.shape[0]
     elif args.LD_approx_method is not None:
         LD_dict = dict({'LD_banded': heels_format.band_format(LD_b, args.block_B), 'eigvec': eigvec, 'eigval': eigval})
         m_ref = eigvec.shape[0]
-
-    # else: # NO APPROX or ORIG
-        # LD_dict = dict({'LD_banded': heels_format.band_format(LD, LD.shape[0])})
 
     return LD_dict, m_ref
 
 def read_sumstats(fp):
     '''
-    Read in the summary statistics. Check if Z and n columns exist
-    Useful for reading of multiple files for different LD blocks.
-
+    Read in the summary statistics. Check if Z and n columns exist.
+    Util func for reading multiple files from different LD blocks.
     
-    Parameters:
+    Input:
     ------------
     fp: file path to the summary statistics with the Z-scores
     
@@ -202,25 +194,23 @@ def read_sumstats(fp):
 
     return df_ss, n_avg
 
-def align_sumstats_LD(args, block_bim_path, df_ss, block_LD_dict, block_m, block_number = None):
-
+def align_sumstats_LD(args, block_ld_snp_info_fp, df_ss, block_LD_dict, block_m, block_number = None):
     '''
-    Aligning the summary statistics with the LD matrix.
+    Align the summary statistics with the LD matrix.
 
     
-    Parameters:
+    Input:
     ------------
-    block_bim_path: file path to the bim file of the LD block
-    df_ss: a dataframe of summary statistics with the Z-scores
+    block_ld_snp_info_fp: file path to the SNP information of a LD block
+    df_ss: dataframe of summary statistics with the Z-scores
     block_LD_dict: LD dictionary of the LD block
     block_m: block size
     block_number: block index
 
-
     Returns:
     ---------
-    block_LD_dict: LD information of the overlap between sumstats and LD
-    df_both: summary statistics of the overlap between sumstats and LD
+    block_LD_dict: LD information of the overlap between sumstats and LD, appropriately scaled.
+    df_both: summary statistics of the overlapped variants between sumstats and LD
 
     '''
 
@@ -230,16 +220,18 @@ def align_sumstats_LD(args, block_bim_path, df_ss, block_LD_dict, block_m, block
         logging.info("Aligning sumstats with LD info for block {}".format(block_number))
 
     # read in LD-SNP info file
-    ld_snp_fp = block_bim_path
+    ld_snp_fp = block_ld_snp_info_fp + ".bim"
     df_bim = pd.read_csv(ld_snp_fp, delim_whitespace=True, index_col=None, names=['CHR','SNP','pos','BP','A1','A2'])
 
-    assert block_m == df_bim.shape[0], "Dim mismatch between LD-SNP info file and the LD input!"
+    logging.info("block_m number: {}, and size of the SNP info file: {}".format(block_m, df_bim.shape[0]))
+    assert block_m == df_bim.shape[0], "Dim mismatch between LD-SNPinfo file and the LD input!"
 
-    # overlapped num of markers (TO DO: acccommodate diff colnames)
-    df_merge = pd.merge(df_bim[["CHR", "BP", "SNP"]], df_ss, left_on = ["CHR", "BP", "SNP"], right_on = ["CHR", "BP", "Predictor"], how = 'left', indicator = "merge_flag")
+    # merging (drop duplicates in the sumstats (concatenated from block-wise files)
+    df_merge = pd.merge(df_bim[["CHR", "BP", "SNP"]], df_ss.drop_duplicates(subset = ["CHR", "BP", "Predictor"]), left_on = ["CHR", "BP", "SNP"], right_on = ["CHR", "BP", "Predictor"], how = 'left', indicator = "merge_flag")
+
     df_both = df_merge[df_merge['merge_flag'] == "both"]
-    m = df_both.shape[0] # number of overlapped markers between sumstats and LD
-    n = np.mean(df_both['n'].values) # this overwrites the input N value
+    m = df_both.shape[0]
+    n = np.mean(df_both['n'].values)
 
     # select overlapped SNPs for LD
     LDsnp_index = (df_merge['merge_flag'] == "both")
@@ -253,24 +245,29 @@ def align_sumstats_LD(args, block_bim_path, df_ss, block_LD_dict, block_m, block
     nm_adj = (n/m) / (n_ref/block_m)
 
     # SNP alignment between sumstats and LD (depending on the method, required adjustments differ)
-
-    # Sparse representation of LD is used
     if args.LD_approx_method == "LR_only":
         block_LD_dict['eigvec'] = block_LD_dict['eigvec'][overlap_index, :] * math.sqrt(nm_adj)
     elif args.LD_approx_method == "Band_only":
         banded_filter = np.arange(block_m)[overlap_index][:block_LD_dict['LD_banded'].shape[0]]
         block_LD_dict['LD_banded'] = block_LD_dict['LD_banded'][banded_filter[:, np.newaxis], overlap_index] * nm_adj
+    elif args.LD_approx_method == "block_UL":
+        banded_filter = np.arange(block_m)[overlap_index][:block_LD_dict['LD_banded'].shape[0]]
+        # SPECIAL NOTE: since Block-GD algorithm uses the original normalized LD (as the objective), we need to re-apply the scaling to match with the HEELS scaling
+        block_LD_dict['LD_banded'] = block_LD_dict['LD_banded'][banded_filter[:, np.newaxis], overlap_index] * n_ref / m * nm_adj
+        block_LD_dict['LD_lr_U'] = block_LD_dict['LD_lr_U'][overlap_index, :] * math.sqrt(n_ref / m * nm_adj)
     elif args.LD_approx_method is not None:
         banded_filter = np.arange(block_m)[overlap_index][:block_LD_dict['LD_banded'].shape[0]]
         block_LD_dict['LD_banded'] = block_LD_dict['LD_banded'][banded_filter[:, np.newaxis], overlap_index] * nm_adj
         block_LD_dict['eigvec'] = block_LD_dict['eigvec'][overlap_index, :] * math.sqrt(nm_adj)
-    else:
+    else: # no approximation involved
         block_LD_dict['LD_banded'] = block_LD_dict['LD_banded'][overlap_index[:, np.newaxis], overlap_index] * nm_adj
 
     return block_LD_dict, df_both
 
 def chol_fac_banded(W_t_tilde, m):
-    '''Using Cholesky factorization to invert a PSD matrix. '''
+    '''
+    Using Cholesky factorization to invert a PSD matrix.
+    '''
     chol = cholesky_banded(W_t_tilde, lower = True)
     precond = cho_solve_banded((chol, True), np.eye(m))
 
@@ -305,6 +302,7 @@ def HEELS_lr_iter(lam, m, Z_m, eigvec, eigval, YtY=1, sigma_e=None):
 
     return BLUP_t, trace, Z_ll
 
+
 def HEELS_band_iter(lam, m, Z_m, LD_b, YtY=1, sigma_e=None):
 
     '''
@@ -319,10 +317,6 @@ def HEELS_band_iter(lam, m, Z_m, LD_b, YtY=1, sigma_e=None):
     b = int(LD_b.shape[0])
     W_t = LD_b.copy()
     W_t[0,:] = W_t[0,:] + lam
-
-    # safest but slowest option
-    # inv = np.linalg.inv(heels_format.unband_format(W_t))
-    # BLUP_t = inv.dot(Z_m)
 
     # use the banded structure
     W_lu = heels_format.band_lu_format(heels_format.unband_format(W_t), b)
@@ -396,6 +390,52 @@ def HEELS_band_lr_iter(lam, m, Z_m, LD_b, eigvec, eigval, LD_approx_method, YtY=
     
     return BLUP_t, trace, Z_ll
 
+
+def HEELS_block_UL_iter(lam, m, Z_m, LD_b, LD_lr_U, LD_approx_method, YtY=1, sigma_e=None):
+
+    '''
+    HEELS updating subroutine if the LD is approximated by the block GD algorithm (banded + UU')
+
+    Note: Both the banded and the low-rank components are guaranteed to be PSD.
+    '''
+
+    b = int(LD_b.shape[0])
+    r = int(LD_lr_U.shape[1])
+    W_t = LD_b.copy()
+    W_t[0,:] = W_t[0,:] + lam
+
+    # use chol if we know W_b is def PSD
+    inv = chol_fac_banded(W_t, m)
+
+    # use Woodbury to solve W^{-1}
+    Ax = inv.dot(Z_m)
+    lowrank = np.linalg.inv(np.eye(r) + np.transpose(LD_lr_U).dot(inv.dot(LD_lr_U)))
+    Abbax = inv.dot(LD_lr_U.dot(lowrank.dot(np.transpose(LD_lr_U).dot(Ax))))
+    BLUP_t = Ax - Abbax
+
+    # tr(W^{-1})
+    lowrank_rt = sqrtm(lowrank)
+    Wuv = inv.dot(LD_lr_U.dot(lowrank_rt))
+    trace = np.trace(inv) - np.sum(np.diag(np.transpose(Wuv).dot(Wuv)))
+
+    # compute the likelihood using the LD approx
+    if sigma_e is not None:
+        # # compute the determinant of the approx directly
+        # det = np.linalg.det(heels_format.unband_format(W_t) + LD_lr_U.dot(np.transpose(LD_lr_U)))
+        # # use det(B+R) = det(B) + det(R) + det(B)Tr(B^{-1}R)
+        # logging.info("Determinant from direct computation is: {}".format(det))
+
+        # solve for the cholesky of the approxiamtion
+        W_t = heels_format.band_format(heels_format.unband_format(W_t) + LD_lr_U.dot(np.transpose(LD_lr_U)), LD_lr_U.shape[0])
+        chol = cholesky_banded(W_t, lower = True)
+
+        # calculate log-likelihood from sumstats + LD
+        Z_ll = (-1)*0.5*(n*np.log(sigma_e) + 2*np.sum(np.log(chol[0,:])) - m*np.log(lam) + ((YtY - np.sum(np.multiply(BLUP_t, np.asarray(Z_m))))/sigma_e))
+    else:
+        Z_ll = None
+
+    return BLUP_t, trace, Z_ll
+
 def HEELS_iter(lam, m, n, Z_m, LD_0, YtY=1, sigma_e=None):
 
     '''
@@ -443,9 +483,9 @@ def HEELS_iter(lam, m, n, Z_m, LD_0, YtY=1, sigma_e=None):
 def HEELS_band_lr(args, Z_m, LD_b, eigvec, eigval, sigma_g_0, sigma_e_0, m, n, YtY, tol=1e-3, maxIter=100):
     
     '''
-    Wrapper function for estimating the variance componnets. 
+    Wrapper function for CV LD decomposition.
 
-    Used for CV functions in LD decomposition. 
+    A minimal version of run_HEELS that calculates sigma^2 given LD approximations.
 
     '''
     # initialize algorithm
@@ -461,6 +501,7 @@ def HEELS_band_lr(args, Z_m, LD_b, eigvec, eigval, sigma_g_0, sigma_e_0, m, n, Y
     logging.info('HEELS procedure started at {T}'.format(T=time.ctime()))
     i = 0
 
+    # stopping criteria: 1) change in variance component estimates; 2) max iterations
     while ((abs(diff_g) > tol or abs(diff_e) > tol) and (i < maxIter)):
         logging.info("Iteration: {}".format(i))
 
@@ -477,7 +518,7 @@ def HEELS_band_lr(args, Z_m, LD_b, eigvec, eigval, sigma_g_0, sigma_e_0, m, n, Y
 
         if args.approx_YtY_bs:
             sample_varY = n*np.mean((args.beta**2 + args.se**2)*2*np.multiply(args.freq, 1-args.freq))
-            logging.info("Using computed sample variance of {} from sumstats".format(sample_varY))
+            logging.info("Using computed sample variance of {} from sumstats".format(sample_varY / n))
             sigma_e = sample_varY - np.matmul(np.transpose(Z_m), BLUP_t).item(0)/n
         elif YtY is not None: # if y'y is known
             YtY = round(float(YtY), 16)
@@ -486,7 +527,7 @@ def HEELS_band_lr(args, Z_m, LD_b, eigvec, eigval, sigma_g_0, sigma_e_0, m, n, Y
         else: # if y'y is left unspecified
             YtY = sigma_g + sigma_e
             sigma_e = YtY - 1/n*(np.matmul(np.transpose(Z_m), BLUP_t).item(0))
-        
+
         if args.constrain_sigma:
             logging.info("Rescaling updated values s.t. sigma_g^2 + sigma_e^2 = 1")
             sigma_tot = sigma_g + sigma_e
@@ -591,8 +632,8 @@ def run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=None, update_s
     # initialize algorithm
     sigma_g = sigma_g_0
     sigma_e = sigma_e_0
-    sigma_g_list = [sigma_g]
-    sigma_e_list = [sigma_e]
+    sigma_g_list = [10, sigma_g]
+    sigma_e_list = [10, sigma_e]
     diff_g = 100
     diff_e = 100
 
@@ -604,7 +645,8 @@ def run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=None, update_s
     Y_ll_path = []
 
     # stopping criteria: 1) log-likelihood path; 2) number of iterations
-    while (abs(Z_ll_path[-2] - Z_ll_path[-1]) > tol and (i < maxIter)):
+    #  and 
+    while (abs(sigma_g_list[-2] - sigma_g_list[-1]) > tol and (i < maxIter)):
         logging.info("Iteration: {}".format(i))
 
         sigma_g_prev = sigma_g 
@@ -612,18 +654,20 @@ def run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=None, update_s
         lam = sigma_e / sigma_g
 
         if YtY is None:
-            # logging.info("Since YtY is not specified, use the sum of sigma_g and sigma_e")
+            logging.info("Since YtY is not specified, use the sum of sigma_g and sigma_e")
             YtY = sigma_g + sigma_e
 
         # update the BLUP and compute trace
         if args.LD_approx_method == "LR_only":
-            BLUP_t, trace, Z_ll = HEELS_lr_iter(lam, m, Z_m, LD_dict['eigvec'], LD_dict['eigval'], YtY, sigma_e)
+            BLUP_t, trace, Z_ll = HEELS_lr_iter(lam, m, Z_m, LD_dict['eigvec'], LD_dict['eigval'], YtY)
         elif args.LD_approx_method == "Band_only":
-            BLUP_t, trace, Z_ll = HEELS_band_iter(lam, m, Z_m, LD_dict['LD_banded'], YtY, sigma_e)
+            BLUP_t, trace, Z_ll = HEELS_band_iter(lam, m, Z_m, LD_dict['LD_banded'], YtY)
+        elif args.LD_approx_method == "block_UL":
+            BLUP_t, trace, Z_ll = HEELS_block_UL_iter(lam, m, Z_m, LD_dict['LD_banded'], LD_dict['LD_lr_U'], args.LD_approx_method, YtY)
         elif args.LD_approx_method is not None:
-            BLUP_t, trace, Z_ll = HEELS_band_lr_iter(lam, m, Z_m, LD_dict['LD_banded'], LD_dict['eigvec'], LD_dict['eigval'], args.LD_approx_method, YtY, sigma_e)
+            BLUP_t, trace, Z_ll = HEELS_band_lr_iter(lam, m, Z_m, LD_dict['LD_banded'], LD_dict['eigvec'], LD_dict['eigval'], args.LD_approx_method, YtY)
         else:
-            BLUP_t, trace, Z_ll = HEELS_iter(lam, m, n, Z_m, LD_dict['LD_banded'], YtY, sigma_e)
+            BLUP_t, trace, Z_ll = HEELS_iter(lam, m, n, Z_m, LD_dict['LD_banded'], YtY)
 
             if args.check_Y_ll:
                 # read in raw genotype
@@ -650,7 +694,7 @@ def run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=None, update_s
                 Y_ll_path.append(Y_ll)
 
         Z_ll_path.append(Z_ll)
-        
+
         # use the alternative updating function for sigma_g
         if update_sigma_g == "noSeq": 
             sigma_g = np.matmul(np.transpose(BLUP_t), BLUP_t).item(0) / (m - trace)
@@ -665,8 +709,6 @@ def run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=None, update_s
         else:
             YtY = round(float(YtY), 16)
             logging.info("Using sample variance of {} to update sigma_e^2".format(YtY))
-            # logging.info(type(Z_m))
-            # logging.info(type(BLUP_t))
             sigma_e = YtY - 1/n*(np.sum(np.multiply(np.asarray(Z_m), BLUP_t)))
 
         # applying constraints on sigma_g and sigma_e
@@ -686,9 +728,9 @@ def run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=None, update_s
         logging.info("Current Z-logL value: {} \n".format(Z_ll_path[-1]))
         # if args.check_Y_ll:
         #     logging.info("Current Y-logL value: {} \n".format(Y_ll_path[-1]))
-        # logging.info("Delta logL: {} \n".format(Z_ll_path[-1] - Z_ll_path[-2]))
-        # sigma_g_list.append(sigma_g)
-        # sigma_e_list.append(sigma_e)
+        # logging.info("Delta logL: {} \n".format(ll_path[-1] - ll_path[-2]))
+        sigma_g_list.append(sigma_g)
+        sigma_e_list.append(sigma_e)
         i = i + 1
 
     time_elapsed = round(time.time() - start_time, 2)
@@ -696,7 +738,7 @@ def run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=None, update_s
     logging.info('Time elapsed for iterative procedure: {T}'.format(T=heels_utils.sec_to_str(time_elapsed)))
     logging.info('Number of iterations: {I}'.format(I=i))
 
-    return sigma_g, sigma_e, i, sigma_g_list, sigma_e_list
+    return sigma_g, sigma_e, i, sigma_g_list, sigma_e_list, Z_ll_path, Y_ll_path
 
 
 # HEELS Block-wise HEELS
@@ -712,8 +754,8 @@ def run_HEELS_block(args, Z_m_list, LD_dict_list, sigma_g_0, sigma_e_0, m_list, 
     # initialize algorithm
     sigma_g = sigma_g_0
     sigma_e = sigma_e_0
-    sigma_g_list = [sigma_g]
-    sigma_e_list = [sigma_e]
+    sigma_g_list = [10, sigma_g]
+    sigma_e_list = [10, sigma_e]
     diff_g = 100
     diff_e = 100
 
@@ -727,22 +769,29 @@ def run_HEELS_block(args, Z_m_list, LD_dict_list, sigma_g_0, sigma_e_0, m_list, 
     BLUP_t = np.zeros(shape=(m,))
     traces = np.zeros(shape=(K,))
     Z_index = np.insert(np.cumsum(np.asarray(m_list)), 0, 0) # index of block boundaries
-    logging.info(Z_m_list[0].shape)
     Z_m = np.vstack(Z_m_list)
-    logging.info(Z_m.shape)
+    logging.info("Total number of SNPs analyed: {}".format(Z_m.shape[0]))
 
-    while ((abs(diff_g) > tol or abs(diff_e) > tol) and (i < maxIter)):
+    # compute sample variance
+    if args.approx_YtY_bs:
+        YtY = np.mean(args.beta**2 + n*args.se**2)
+        logging.info("Using beta and SE to approximate sample variance {}".format(YtY))
+    else:
+        YtY = round(float(YtY), 16)
+        logging.info("Using sample variance of {} to update sigma_e^2".format(YtY))
+
+    while ((abs(sigma_g_list[-2] - sigma_g_list[-1]) > tol or abs(sigma_e_list[-2] - sigma_e_list[-1]) > tol) and (i < maxIter)):
         logging.info("Iteration: {}".format(i))
 
         sigma_g_prev = sigma_g 
         sigma_e_prev = sigma_e
         lam = sigma_e / sigma_g
 
-        if YtY is None: # currently disabled
+        if YtY is None:
             logging.info("Since YtY is not specified, use the sum of sigma_g and sigma_e")
             YtY = sigma_g + sigma_e
 
-        # update BLUP (can be potentially parallelized)
+        # update BLUP (can be parallelized)
         logging.info("Starting block-wise BLUP updates")
         for k in range(K):
             BLUP_t[Z_index[k]:Z_index[k+1]], traces[k] = block_BLUP_update(args, lam, m_list[k], n, Z_m_list[k], LD_dict_list[k])
@@ -751,7 +800,6 @@ def run_HEELS_block(args, Z_m_list, LD_dict_list, sigma_g_0, sigma_e_0, m_list, 
         # logging.info(BLUP_t)
 
         logging.info("Aggregating across blocks for variance component updates")
-        # aggregate block results
         trace = np.sum(traces)
 
         logging.info("Total number of markers: {}".format(m))
@@ -763,15 +811,9 @@ def run_HEELS_block(args, Z_m_list, LD_dict_list, sigma_g_0, sigma_e_0, m_list, 
         else:
             sigma_g = 1/m*(np.matmul(np.transpose(BLUP_t), BLUP_t).item(0) + sigma_e*trace)
 
-        # use the summary statistics to infer sample variance
-        if args.approx_YtY_bs:
-            sample_varY = np.mean(args.beta**2 + n*args.se**2)
-            sigma_e = sample_varY - 1/n*(np.matmul(np.transpose(Z_m), BLUP_t).item(0))
-            logging.info("Using beta and SE to approximate sample variance {}".format(sample_varY))
-        else:
-            YtY = round(float(YtY), 16)
-            logging.info("Using sample variance of {} to update sigma_e^2".format(YtY))
-            sigma_e = YtY - 1/n*(np.matmul(np.transpose(Z_m), BLUP_t).item(0))
+        # update sigma_e 
+        sigma_e = YtY - 1/n*(np.sum(np.multiply(np.asarray(Z_m), BLUP_t)))
+        # sigma_e = sample_varY - 1/n*(np.matmul(np.transpose(Z_m), BLUP_t).item(0))
 
         # applying constraints on sigma_g and sigma_e
         if args.constrain_sigma:
@@ -787,8 +829,9 @@ def run_HEELS_block(args, Z_m_list, LD_dict_list, sigma_g_0, sigma_e_0, m_list, 
         logging.info("Current sigma_e: {} \n".format(sigma_e))
         logging.info("Difference in sigma_g: {} \n".format(diff_g))
         logging.info("Difference in sigma_e: {} \n".format(diff_e))
-        # sigma_g_list.append(sigma_g)
-        # sigma_e_list.append(sigma_e)
+
+        sigma_g_list.append(sigma_g)
+        sigma_e_list.append(sigma_e)
         i = i + 1
 
     time_elapsed = round(time.time() - start_time, 2)
@@ -799,22 +842,26 @@ def run_HEELS_block(args, Z_m_list, LD_dict_list, sigma_g_0, sigma_e_0, m_list, 
     return sigma_g, sigma_e, i, sigma_g_list, sigma_e_list
     
 def block_BLUP_update(args, lam, m_sub, n, Z_sub, LD_dict):
+    
     # wrapper for block-specific evaluation of BLUP and trace
+
     if args.LD_approx_method == "LR_only":
         BLUP_t, trace, _ = HEELS_lr_iter(lam, m_sub, Z_sub, LD_dict['eigvec'], LD_dict['eigval'])
     elif args.LD_approx_method == "Band_only":
         BLUP_t, trace, _ = HEELS_band_iter(lam, m_sub, Z_sub, LD_dict['LD_banded'])
+    elif args.LD_approx_method == "block_UL":
+        BLUP_t, trace, _ = HEELS_block_UL_iter(lam, m_sub, Z_sub, LD_dict['LD_banded'], LD_dict['LD_lr_U'],args.LD_approx_method)
     elif args.LD_approx_method is not None:
         BLUP_t, trace, _ = HEELS_band_lr_iter(lam, m_sub, Z_sub, LD_dict['LD_banded'], LD_dict['eigvec'], LD_dict['eigval'], args.LD_approx_method)
     else:
-        BLUP_t, trace, _ = HEELS_iter(lam, m_sub, n, Z_sub, LD_dict['LD_banded'], YtY = args.YtY) # Z_ll kept for heritage
+        BLUP_t, trace, _ = HEELS_iter(lam, m_sub, n, Z_sub, LD_dict['LD_banded'])
 
     return BLUP_t.reshape(-1,), trace
 
 def block_BLUP_update_util(lam, m_sub, Z_sub, LD_dict):
-    # TO TEST: enable other LD approx strategies
+    # FUTURE: enable other LD approx strategies
     # currently, only full exact LD is allowed
-    BLUP_t, trace, _ = HEELS_iter(lam, m_sub, Z_sub, LD_dict['LD_banded'])
+    BLUP_t, trace, _ = HEELS_iter(lam, m_sub, n, Z_sub, LD_dict['LD_banded'])
 
     return BLUP_t.reshape(-1,), trace
 
@@ -841,7 +888,7 @@ IOfile.add_argument('--est_fp', default=None, type=str,
 IOfile.add_argument('--sumstats_fp', default=None, type=str, 
     help='File path of the GWAS summary statistics.')
 IOfile.add_argument('--ld_snp_fp', default='geno.bim', type=str, 
-    help='File path of the LD SNP information, which is used for alignment of the LD SNPs with the GWAS SNPs. The required columns are CHR, BP and SNP. In our study, we simply use the .bim file for this alignment purpose. Other file formats are also allowed, as long as the required columns are present.')
+    help='File path of the LD SNP information. Used for alignment of the LD SNPs with the GWAS SNPs. Required columns are CHR,BP,SNP. Currently using the .bim file directly. Other file formats are also allowed, as long as the required columns are present.')
 IOfile.add_argument('--ld_fp', default='ld_mat', type=str, 
     help='File paths of the LD matrix. Should be stored in .npz format. If --partition is specified, the filepath should contain "@" to indicate where --block_index should be inserted.')
 IOfile.add_argument('--LD_approx_path', default=None, type=str,
@@ -859,6 +906,8 @@ IOfile.add_argument('--partition', default=False, action="store_true",
     help='Whether to run block-wise HEELS estimation.')
 IOfile.add_argument('--num_blocks', default=None, type=int, 
     help='Number of blocks to run partitioned-HEELS, to replace "@" in --ld_fp for reading of LD blocks. Only used when --partition is turned on.')
+IOfile.add_argument('--block_index', default=None, type=str,
+    help='Block indexes or numbers to replace "@" in the specified file paths. It should be provided with comma as the separator. ')
 
 # plink input (may not be as reliable)
 # IOfile.add_argument('--plink_ld_bin_full', default=None, type=str, 
@@ -879,7 +928,7 @@ LD_approx.add_argument('--LD_approx_R', default=200, type=int,
 LD_approx.add_argument('--LD_approx_mode', default=None, type=str,
     help='If None, no LD decomposition will be performed. If "auto", grid search of the (b,r) values; if "manual", single decomposition of the LD using the specified (b,r) values.')
 LD_approx.add_argument('--LD_approx_method', default=None, type=str,
-    help='The specific method to be used for decomposing the LD. Current options include: joint, seq_band_lr, seq_lr_band, PSD_band_lr, lr_PSD_band, spike_LR, spike_LR_joint, spike_PCA, Band_only, LR_only.')
+    help='The specific method to be used for decomposing the LD. Current options include: joint, seq_band_lr, seq_lr_band, PSD_band_lr, lr_PSD_band, spike_LR, spike_LR_joint, spike_PCA, Band_only, LR_only. WIP option: block_UL, which assumes the UL decomposition from block-GD algorithm.')
 LD_approx.add_argument('--LR_decomp_method', default="optim", type=str,
     help='The mode to conduct low-rank decomposition. Mode code: optim - use optimization (avoid eigen, recommended); random_svd - use randomized algorithm (avoid eigen); exact - direct eigendecomposition (can be quite slow).')
 LD_approx.add_argument('--method', default="L-BFGS-B", type=str, 
@@ -950,6 +999,8 @@ estimation = parser.add_argument_group(title="Misc. flags related to estimation"
 
 estimation.add_argument('--not_run_heels', default=False, action="store_true",
  help='Debug flag for isolating the LR-approximation step from the actual estimation step')
+estimation.add_argument('--weights', default=None, type=str,
+ help='File path to the saved SNP-specific weights for variance. Specifies the diagonal elements of Q.')
 estimation.add_argument('--init_values', default=None, type=str, 
     help='Initial values of sigma_g^2 and sigma_e^2. If not specified, these values are randomly generated.')
 estimation.add_argument('--constrain_sigma', default=False, action="store_true", 
@@ -1059,8 +1110,8 @@ if __name__ == '__main__':
                 logging.info("Reading in multiple LD blocks.")
 
                 # replace @ with block indexes
-                block_index = list(np.arange(int(args.num_blocks)) + 1)
-                LD_fp_list = [args.ld_fp.replace("@", str(block_index[i])) for i in range(args.num_blocks)]
+                block_index = list(args.block_index.split(','))
+                LD_fp_list = [args.ld_fp.replace("@", str(block_index[i])) for i in range(len(block_index))]
 
                 # read in LD as a list of objects
                 LD_list = [np.load(x)['LD'] for x in LD_fp_list]
@@ -1127,7 +1178,7 @@ if __name__ == '__main__':
                     LD_approx_start = time.time()
                     LD_norm = np.linalg.norm(LD)
 
-                    # TO DO: enable flexible specification of the norm function
+                    # FUTURE: enable flexible specification of the norm function
                     if args.LD_approx_mode == "auto":
                         LD_dict, F_norm = heels_LDdecomp.LDdecomp_auto(args, LD)
 
@@ -1138,7 +1189,7 @@ if __name__ == '__main__':
                     logging.info('Sparse approximation time: {T}'.format(T=(LD_approx_time)))
 
                     if F_norm / LD_norm > 0.1:
-                        logging.info("Warning: the percent of LD matrix approximated is below 0.90. This may lead to bias in h2 estimation.")
+                        logging.info("Warning: the percent of LD matrix approximated is below 0.90. This may lead to bias.")
 
                     # report the approximation performance of the LD
                     logging.info("Approximated \% of LD: {}%".format(100 - F_norm / LD_norm * 100))
@@ -1147,13 +1198,15 @@ if __name__ == '__main__':
             logging.info("Reading pre-computed low-dimensionaldimenisn representation of LD from path: \n{}".format(args.LD_approx_path))
 
             if args.partition: # TO TEST
-                block_path_list = args.LD_approx_path.split(',')
+                block_index = list(args.block_index.split(','))
+                block_path_list = [args.LD_approx_path.replace("@", str(block_index[i])) for i in range(len(block_index))]
                 K = len(block_path_list)
                 kiu = [read_sparse_LD(args, block_path_list[k], k+1) for k in range(K)]
                 LD_dict_list = [x[0] for x in kiu]
                 m_ref_list = [x[1] for x in kiu]
             else:
                 LD_dict, m_ref = read_sparse_LD(args, args.LD_approx_path)
+                logging.info("Size of LD matrix: {}".format(m_ref))
 
         logging.info(short_borderline)
 
@@ -1168,7 +1221,7 @@ if __name__ == '__main__':
                 logging.info("Parsing summary statistics from file")
                 df_ss = pd.read_csv(args.sumstats_fp, delim_whitespace=True, index_col=None)
 
-                # check that the sumstats indeed has the Z and n columns
+                # check that the sumstats indeed has the Z and n columns 
                 # (TO DO: acccommodate diff colnames, same as mtag and mama)
                 assert 'Z' in list(df_ss.columns), "The summstats is missing a Z column!"
                 assert 'n' in list(df_ss.columns), "The sumstats is missing the n column!"
@@ -1181,9 +1234,9 @@ if __name__ == '__main__':
 
             else:
                 logging.info("Parsing summary statistics from multiple files")
-                block_index = list(np.arange(int(args.num_blocks)) + 1)
-                ss_fp_list = [args.sumstats_fp.replace("@", str(block_index[i])) for i in range(args.num_blocks)]
-                df_ss, n_avg_block = zip(*[read_sumstats(ss_fp_list[i]) for i in range(args.num_blocks)])
+                block_index = list(args.block_index.split(','))
+                ss_fp_list = [args.sumstats_fp.replace("@", str(block_index[i])) for i in range(len(block_index))]
+                df_ss, n_avg_block = zip(*[read_sumstats(ss_fp_list[i]) for i in range(len(block_index))])
                 n = np.mean(n_avg_block)
                 df_ss = list(df_ss)
 
@@ -1194,8 +1247,8 @@ if __name__ == '__main__':
 
             # take the overlap between LD and sumstats
             if args.partition: # TO TEST
-                ld_snp_fp_list = [args.ld_snp_fp.replace("@", str(block_index[i])) for i in range(args.num_blocks)]
-                K = args.num_blocks
+                ld_snp_fp_list = [args.ld_snp_fp.replace("@", str(block_index[i])) for i in range(len(block_index))]
+                K = len(block_index)
                 kiu = [align_sumstats_LD(args, ld_snp_fp_list[k], df_ss[k], LD_dict_list[k], m_ref_list[k], k+1) for k in range(K)]
                 LD_dict_list = [x[0] for x in kiu]
                 df_both_list = [x[1] for x in kiu]
@@ -1203,23 +1256,13 @@ if __name__ == '__main__':
             else:
                 LD_dict, df_both = align_sumstats_LD(args, args.ld_snp_fp, df_ss, LD_dict, m_ref)
 
-            logging.info(short_borderline)
+        logging.info(short_borderline)
+
         # ==========================
         # prepare for running HEELS
         # ==========================
         if not args.not_run_heels or args.calc_var:
-            logging.info("Preparing the Z-scores for running HEELS and adjust if necessary")
-
-            # use beta and se to approx var(y)
-            if args.approx_YtY_bs:
-                args.beta = np.asarray(df_both[[args.beta_name]])
-                args.se = np.asarray(df_both[[args.se_name]])
-                args.freq = np.asarray(df_both[[args.freq_name]])
-                args.n = np.asarray(df_both[[args.n_name]])
-                # args.beta = df_both[[args.z_name]].values / np.sqrt(df_both[[args.n_name]].values)
-                # args.se = 1 / np.sqrt(df_both[[args.n_name]].values)
-                # args.beta = df_both[[args.z_name]].values / math.sqrt(n)
-                # args.se = 1 / math.sqrt(n)
+            logging.info("Preparing the Z-scores for running HEELS and adjust by n and p")
 
             # standardize sumstats
             if args.partition: # TO TEST
@@ -1227,31 +1270,29 @@ if __name__ == '__main__':
                 m_total = np.sum(m_list)
                 # allow markers to have different sample size
                 Z_m_list = [np.multiply(df_both_list[k][['Z']].values, np.sqrt(df_both_list[k][['n']].values)) / math.sqrt(m_total) for k in range(K)]
+
+                # use beta and se to approx var(y)
+                if args.approx_YtY_bs:
+                    args.beta = np.vstack([df_both_list[k][[args.beta_name]].values for k in range(K)])
+                    args.se = np.vstack([df_both_list[k][[args.se_name]].values for k in range(K)])
+                    args.freq = np.vstack([df_both_list[k][[args.freq_name]].values for k in range(K)])
+                    args.n = np.vstack([df_both_list[k][[args.n_name]].values for k in range(K)])
             else:
                 m = df_both.shape[0]
                 # allow markers to have different sample ize
                 Z_m = np.multiply(df_both[[args.z_name]].values, np.sqrt(df_both[[args.n_name]])) / math.sqrt(m) 
 
-                # if args.approx_YtY_bs or args.YtY is not None:
-                #     logging.info("Using the original marginal statistics")
-                #     Z_m = df_both[[args.beta_name]].values * n_ref * math.sqrt(1 / m)
-                #     MAF_vec = df_both[[args.freq_name]].values
-                #     X_SD_vec = 1 / np.sqrt(2*np.multiply(MAF_vec, 1-MAF_vec))
+                # use beta and se to approx var(y)
+                if args.approx_YtY_bs:
+                    args.beta = np.asarray(df_both[[args.beta_name]])
+                    args.se = np.asarray(df_both[[args.se_name]])
+                    args.freq = np.asarray(df_both[[args.freq_name]])
+                    args.n = np.asarray(df_both[[args.n_name]])
+                    # args.beta = df_both[[args.z_name]].values / np.sqrt(df_both[[args.n_name]].values)
+                    # args.se = 1 / np.sqrt(df_both[[args.n_name]].values)
+                    # args.beta = df_both[[args.z_name]].values / math.sqrt(n)
+                    # args.se = 1 / math.sqrt(n)
 
-                #     logging.info("Adjusting LD matrix, using var(X)")
-                #     LD_adj_mat = np.outer(X_SD_vec, X_SD_vec)
-                #     LD_adj_mat = heels_format.band_format(LD_adj_mat, LD_adj_mat.shape[0])
-                #     LD_dict['LD_banded'] = np.multiply(LD_adj_mat, LD_dict['LD_banded'])
-
-                #     # DEBUG: identify NaN and Inf values
-                #     ar_nan = np.where(np.isnan(LD_dict['LD_banded']))
-                #     ar_inf = np.where(np.isinf(LD_dict['LD_banded']))
-                #     logging.info("NaN values: ")
-                #     logging.info(ar_nan[0].shape)
-                #     logging.info("Inf values: ")
-                #     logging.info(ar_inf[0].shape)
-                # else:
-                # Z_m = df_both[[args.z_name]].values * math.sqrt(n_ref / m)        
 
             # initialize var component values
             if args.init_values is not None:
@@ -1318,26 +1359,11 @@ if __name__ == '__main__':
 
             if args.partition: # TO TEST
                 logging.info("Start running partitioned-HEELS")
-                sigma_g, sigma_e, i, sigma_g_list, sigma_e_list = run_HEELS_block(args, Z_m_list, LD_dict_list, sigma_g_0, sigma_e_0, m_list, n, YtY=args.YtY, update_sigma_g="Seq", tol=tol, maxIter=1000)
-           
-                # logging.info("DEBUG: Start concatenating block-wise LD together")
-                # LD = np.zeros(shape=(m_total, m_total))
-                # Z_index = np.insert(np.cumsum(np.asarray(m_list)), 0, 0) 
-
-                # for k in range(K):
-                #     LD[Z_index[k]:Z_index[k+1], Z_index[k]:Z_index[k+1]] = LD_list[k]
-
-                # # band the LD matrix (to be consistent with the sparse representation)
-                # LD_dict = dict({'LD_banded': heels_format.band_format(LD, LD.shape[0])})
-
-                # Z_m = np.vstack(Z_m_list)
-                # logging.info("Shape of concatenated Z df: {}".format(Z_m.shape))
-
-                # sigma_g, sigma_e, i, sigma_g_list, sigma_e_list, ll_path, Y_ll_path = run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m_total, n, YtY=args.YtY, update_sigma_g="Seq", tol=tol, maxIter=1000)
+                sigma_g, sigma_e, i, sigma_g_list, sigma_e_list = run_HEELS_block(args, Z_m_list, LD_dict_list, sigma_g_0, sigma_e_0, m_list, n, YtY=args.YtY, update_sigma_g="Seq", tol=tol, maxIter=args.maxIter)
 
             else:
                 logging.info("Start running HEELS")
-                sigma_g, sigma_e, i, sigma_g_list, sigma_e_list = run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=args.YtY, update_sigma_g="Seq", tol=tol, maxIter=100)
+                sigma_g, sigma_e, i, sigma_g_list, sigma_e_list, Z_ll_path, Y_ll_path = run_HEELS(args, Z_m, LD_dict, sigma_g_0, sigma_e_0, m, n, YtY=args.YtY, update_sigma_g="Seq", tol=tol, maxIter=args.maxIter)
 
             logging.info("Finish running HEELS. Writing results into file.")
             logging.info(short_borderline)
@@ -1348,7 +1374,7 @@ if __name__ == '__main__':
 
             # if not args.partition:
             #     with open(args.output_fp + "_ll_path.txt", 'w') as file:
-            #         for ll in ll_path:
+            #         for ll in Z_ll_path:
             #             file.write(str(ll)+'\n')
 
             #     if args.check_Y_ll:
@@ -1371,11 +1397,9 @@ if __name__ == '__main__':
         # =============
         # Variance
         # =============
-        
+        logging.info(short_borderline)
         if args.calc_var:
-            
-            logging.info(short_borderline)
-            
+
             if args.partition:
                 raise IOError("Currently, variance can only be calculated for a single block.")
 
@@ -1429,6 +1453,7 @@ if __name__ == '__main__':
                         raise ValueError("Currently, with sparse representation of the LD, only the Banded + LR form is enabled for computing the variance")
 
                     logging.info("Computing the variance of HEELS estimator using approx of LD")
+                    # TO DO: add another HEELS variance function for block_UL approx (in the heels_utils package)
                     var_mat_heels = heels_utils.HEELS_variance_lowrank(sigma_g, sigma_e, LD_dict['LD_banded'], LD_dict['eigval'], LD_dict['eigvec'], n, m)
 
                 # multi Delta function for var of h2
