@@ -24,7 +24,7 @@ from scipy.sparse import linalg, coo_matrix
 from scipy.linalg import qr, cho_factor, cho_solve, sqrtm, pinvh
 from scipy.linalg import cholesky_banded, cho_solve_banded, eigvals_banded, eig_banded, solve_banded
 from scipy.optimize import minimize, Bounds
-from pandas_plink import read_plink1_bin, read_grm, read_rel
+from pandas_plink import read_plink1_bin, read_grm, read_rel, read_plink
 import sklearn.utils.extmath as skmath
 
 import faulthandler; faulthandler.enable()

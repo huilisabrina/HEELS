@@ -1240,11 +1240,11 @@ def LDdecomp(args, LD, norm_func = np.linalg.norm):
     F_norm: norm of the approximation error, evaluated by "norm_func"
 
     '''
-    logging.info("Start sparse matrix decomposition")
-    logging.info("using pre-specified hyperparameter value of (B,R) = ({},{})".format(args.LD_approx_B, args.LD_approx_R))
+    logging.info("Start sparse matrix decomposition, \nusing pre-specified value of (B,R) = ({},{})".format(args.LD_approx_B, args.LD_approx_R))
 
     LD_norm = norm_func(LD)
     m_ref = LD.shape[0]
+
 
     #====================
     # Banded + LR models
@@ -1298,7 +1298,7 @@ def LDdecomp(args, LD, norm_func = np.linalg.norm):
         F_norm = norm_func(LD - LD_lr - LD_b)
 
     elif args.LD_approx_method == "PSD_band_lr":
-        logging.info("Performing one-time decomposition by 1) approximating the banded component using a PSD matrix, and 2) doing low-rank decomposition on the residual.")
+        logging.info("Performing one-time decomposition by 1) PSD approx the banded component and 2) doing low-rank decomposition on the residual.")
 
         LD_b = heels_format.dense_band(LD, args.LD_approx_B)
         LD_b_norm = norm_func(LD_b)
